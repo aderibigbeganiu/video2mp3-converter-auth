@@ -5,22 +5,13 @@ import sqlite3
 import jwt
 from flask import Flask, request, g
 
-DATABASE = "/path/to/database.db"
 server = Flask(__name__)
 
 
-def get_db():
-    db = getattr(g, "_database", None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-    return db
-
-
-@server.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, "_database", None)
-    if db is not None:
-        db.close()
+def get_db_connection():
+    conn = sqlite3.connect("db.sqlite3")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 @server.route("/login/", methods=["POST"])
@@ -30,11 +21,11 @@ def login():
         return "Missing credentials", 401
 
     # Check db for username and password
-    cur = get_db().cursor()
+    cur = get_db_connection().cursor()
     res = cur.execute(
-        "SELECT email, password FROM user WHERE email=%s", (auth.username,)
+        f"SELECT email, password FROM users WHERE email=?", (auth.username,)
     )
-    if res > 0:
+    if res:
         user_row = cur.fetchone()
         email = user_row[0]
         password = user_row[1]
@@ -47,14 +38,13 @@ def login():
         return "Invalid credentials", 401
 
 
-server.route("/validate/", methods=["POST"])
-
-
+@server.route("/validate/", methods=["POST"])
 def validate():
     encoded_jwt = request.headers["Authorization"]
 
     if not encoded_jwt:
         return "Missing credentials", 401
+
     encoded_jwt = encoded_jwt.split(" ")[1]
 
     try:
@@ -64,7 +54,7 @@ def validate():
             algorithms=["HS256"],
         )
     except:
-        return "Not authorze", 403
+        return "Not authorize", 403
     return decoded, 200
 
 
@@ -72,8 +62,10 @@ def createJWT(username, secret, authz):
     return jwt.encode(
         {
             "username": username,
-            "expiration": datetime.datetime.now(datetime.timezone.utc)
-            + datetime.timedelta(days=1),
+            "expiration": str(
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(days=1)
+            ),
             "iat": datetime.datetime.utcnow(),
             "admin": authz,
         },
