@@ -19,6 +19,7 @@ spec:
       containers:
       - name: auth
         image: abayomiganiy/auth
+        imagePullPolicy: Never
         resources:
           limits:
             memory: "128Mi"
